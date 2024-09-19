@@ -19,8 +19,8 @@ jQuery(document).ready(function($) {
             processData: false,
             success: function(response) {
                 if (response.success) {
-                    // Start processing rows after the file is uploaded
-                    processNextRow(3, response.data.total_rows); // Start from row 3
+                    // Start processing rows in chunks after the file is uploaded
+                    processNextChunk(3, 100, response.data.total_rows); // Start from row 3, chunk size 100
                 } else {
                     $('#iufe-status').html('<p>Error: ' + response.data + '</p>');
                 }
@@ -28,14 +28,15 @@ jQuery(document).ready(function($) {
         });
     });
 
-    function processNextRow(currentRow, totalRows) {
+    function processNextChunk(chunkStart, chunkSize, totalRows) {
         $.ajax({
             url: iufe_ajax.ajax_url,
             type: 'POST',
             data: {
-                action: 'iufe_process_row',
+                action: 'iufe_process_chunk',
                 nonce: iufe_ajax.nonce,
-                row_index: currentRow
+                chunk_start: chunkStart,
+                chunk_size: chunkSize
             },
             success: function(response) {
                 if (response.success) {
@@ -44,7 +45,10 @@ jQuery(document).ready(function($) {
                     $('#iufe-status').html('<p>' + response.data.message + '</p>');
 
                     if (progress < 100) {
-                        processNextRow(response.data.row_index, totalRows);
+                        // Process the next chunk
+                        processNextChunk(response.data.next_chunk_start, chunkSize, totalRows);
+                    } else {
+                        $('#iufe-status').html('<p>All rows have been processed successfully!</p>');
                     }
                 } else {
                     $('#iufe-status').html('<p>Error: ' + response.data + '</p>');

@@ -3,7 +3,9 @@
 Plugin Name: Import Users from Excel
 Description: Import users from an Excel file into WordPress, ensuring compatibility with the Digits plugin for mobile-based registration.
 Version: 1.2
-Author: Your Name
+Author: Mohammad Kazem Gholian
+Author URI: https://valiasrcs.com
+Plugin URI: https://valiasrcs.com/fa/how-to-transfer-easrp-users
 */
 
 // Add your phone validation function
@@ -97,32 +99,35 @@ function iufe_handle_upload() {
 }
 add_action('wp_ajax_iufe_upload_file', 'iufe_handle_upload');
 
-// Handle processing the rows via AJAX
-function iufe_handle_process_row() {
+// Handle processing the rows in chunks
+function iufe_handle_process_chunk() {
     check_ajax_referer('iufe_import_nonce', 'nonce');
     
     if (!current_user_can('manage_options')) {
         wp_send_json_error('You do not have permission to perform this action.');
     }
 
-    // Get the current row index and total rows from the AJAX request
-    $row_index = isset($_POST['row_index']) ? intval($_POST['row_index']) : 3;
+    // Get the current chunk index and the size of the chunk from the AJAX request
+    $chunk_start = isset($_POST['chunk_start']) ? intval($_POST['chunk_start']) : 3;
+    $chunk_size = isset($_POST['chunk_size']) ? intval($_POST['chunk_size']) : 100;
     $file_path = get_option('iufe_uploaded_file');
     $rows = iufe_get_excel_rows($file_path);
+    $total_rows = count($rows);
 
-    if ($row_index < count($rows)) {
-        // Process the current row
-        iufe_process_row($rows[$row_index]);
+    // Process the current chunk of rows
+    for ($i = $chunk_start; $i < $chunk_start + $chunk_size && $i < $total_rows; $i++) {
+        iufe_process_row($rows[$i]);
+    }
 
-        // Calculate progress percentage
-        $total_rows = count($rows) - 3; // Exclude header rows
-        $progress = (($row_index - 2) / $total_rows) * 100;
+    // Calculate progress percentage
+    $progress = (($i - 2) / ($total_rows - 2)) * 100;
 
-        // Send the response for the next row
+    // Check if there are more rows to process
+    if ($i < $total_rows) {
         wp_send_json_success([
             'progress' => $progress,
-            'row_index' => $row_index + 1,
-            'message' => "Processed row " . ($row_index - 2) . " of " . $total_rows
+            'next_chunk_start' => $i,
+            'message' => "Processed rows " . ($chunk_start - 2) . " to " . ($i - 2) . " of " . ($total_rows - 3)
         ]);
     } else {
         // All rows processed
@@ -132,7 +137,7 @@ function iufe_handle_process_row() {
         ]);
     }
 }
-add_action('wp_ajax_iufe_process_row', 'iufe_handle_process_row');
+add_action('wp_ajax_iufe_process_chunk', 'iufe_handle_process_chunk');
 
 // Get the rows from the Excel file
 function iufe_get_excel_rows($file_path) {
