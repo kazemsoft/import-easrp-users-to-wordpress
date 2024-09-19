@@ -3,36 +3,53 @@ jQuery(document).ready(function($) {
         e.preventDefault();
         var formData = new FormData();
         formData.append('file', $('#iufe_excel_file')[0].files[0]);
-        formData.append('action', 'iufe_import_users');
+        formData.append('action', 'iufe_upload_file');
         formData.append('nonce', iufe_ajax.nonce);
 
         // Reset progress bar
         $('#iufe-progress').css('width', '0%').text('0%');
+        $('#iufe-status').html('');
 
+        // Upload the file first
         $.ajax({
             url: iufe_ajax.ajax_url,
             type: 'POST',
             data: formData,
             contentType: false,
             processData: false,
-            xhr: function() {
-                var xhr = new window.XMLHttpRequest();
-                xhr.upload.addEventListener('progress', function(evt) {
-                    if (evt.lengthComputable) {
-                        var percentComplete = evt.loaded / evt.total * 100;
-                        $('#iufe-progress').css('width', percentComplete + '%').text(Math.round(percentComplete) + '%');
-                    }
-                }, false);
-                return xhr;
-            },
             success: function(response) {
                 if (response.success) {
-                    $('#iufe-progress').css('width', response.data.progress + '%').text(Math.round(response.data.progress) + '%');
-                    $('#iufe-status').html('<p>' + response.data.message + '</p>');
+                    // Start processing rows after the file is uploaded
+                    processNextRow(3, response.data.total_rows); // Start from row 3
                 } else {
                     $('#iufe-status').html('<p>Error: ' + response.data + '</p>');
                 }
             }
         });
     });
+
+    function processNextRow(currentRow, totalRows) {
+        $.ajax({
+            url: iufe_ajax.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'iufe_process_row',
+                nonce: iufe_ajax.nonce,
+                row_index: currentRow
+            },
+            success: function(response) {
+                if (response.success) {
+                    var progress = response.data.progress;
+                    $('#iufe-progress').css('width', progress + '%').text(Math.round(progress) + '%');
+                    $('#iufe-status').html('<p>' + response.data.message + '</p>');
+
+                    if (progress < 100) {
+                        processNextRow(response.data.row_index, totalRows);
+                    }
+                } else {
+                    $('#iufe-status').html('<p>Error: ' + response.data + '</p>');
+                }
+            }
+        });
+    }
 });
