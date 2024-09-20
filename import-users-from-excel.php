@@ -34,6 +34,7 @@ function iufe_enqueue_scripts($hook) {
         return;
     }
     wp_enqueue_script('iufe-script', plugins_url('/iufe-script.js', __FILE__), ['jquery'], null, true);
+    wp_enqueue_style('iufe-style', plugins_url('/iufe-style.css', __FILE__));
     wp_localize_script('iufe-script', 'iufe_ajax', [
         'ajax_url' => admin_url('admin-ajax.php'),
         'nonce' => wp_create_nonce('iufe_import_nonce')
@@ -56,12 +57,13 @@ add_action('admin_menu', 'iufe_register_menu');
 
 // Display the upload form with progress bar
 function iufe_import_page() {
+    $isIdle = get_option('iufe_status')=="progress"?false:true;
     ?>
-    <div class="wrap">
+    <div class="wrap iufe-main">
         <h2>Import Users from Excel</h2>
         <form id="iufe-import-form" enctype="multipart/form-data">
             <input type="file" name="iufe_excel_file" id="iufe_excel_file" accept=".xlsx">
-            <input type="submit" value="Upload and Import" class="button-primary">
+            <input type="submit" id="iufe-btn" <?= $isIdle?"":"disabled" ?> value="Upload and Import" class="button-primary">
             <div id="iufe-progress-bar" style="width: 100%; background-color: #f3f3f3; margin-top: 10px;">
                 <div id="iufe-progress" style="width: 0%; height: 24px; background-color: #4caf50; text-align: center; line-height: 24px; color: white;">0%</div>
             </div>
@@ -85,6 +87,7 @@ function iufe_handle_upload() {
         
         if (isset($uploaded_file['file'])) {
             update_option('iufe_uploaded_file', $uploaded_file['file']); // Save file path to option
+            update_option('iufe_status','progress');
             $rows = iufe_get_excel_rows($uploaded_file['file']);
             wp_send_json_success([
                 'total_rows' => count($rows),
@@ -131,6 +134,7 @@ function iufe_handle_process_chunk() {
         ]);
     } else {
         // All rows processed
+        update_option('iufe_status','progress');
         wp_send_json_success([
             'progress' => 100,
             'message' => 'All rows have been processed!'
