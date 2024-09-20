@@ -9,17 +9,19 @@ Plugin URI: https://valiasrcs.com/fa/how-to-transfer-easrp-users
 */
 
 // Add your phone validation function
-function is_phone($phone) {
+function is_phone($phone)
+{
     $pattern = '/(\+?98|098|0|0098)?(9\d{9})/';
     return (bool) preg_match($pattern, $phone);
 }
 
 // Delete all users except admin for testing purposes
-function iufe_delete_all_users_but_admin() {
+function iufe_delete_all_users_but_admin()
+{
     $users = get_users([
         'exclude' => [1] // Keep admin (assuming admin has user ID 1)
     ]);
-    
+
     foreach ($users as $user) {
         wp_delete_user($user->ID);
     }
@@ -36,7 +38,8 @@ function iufe_init_process_status()
 register_activation_hook(__FILE__, 'iufe_init_process_status');
 
 // Enqueue scripts for AJAX handling and progress bar update
-function iufe_enqueue_scripts($hook) {
+function iufe_enqueue_scripts($hook)
+{
     if ($hook !== 'tools_page_import-users-from-excel') {
         return;
     }
@@ -50,7 +53,8 @@ function iufe_enqueue_scripts($hook) {
 add_action('admin_enqueue_scripts', 'iufe_enqueue_scripts');
 
 // Register the submenu under Tools
-function iufe_register_menu() {
+function iufe_register_menu()
+{
     add_submenu_page(
         'tools.php',
         'Import Users from Excel',
@@ -63,27 +67,29 @@ function iufe_register_menu() {
 add_action('admin_menu', 'iufe_register_menu');
 
 // Display the upload form with progress bar
-function iufe_import_page() {
-    $isIdle = get_option('iufe_status')=="progress"?false:true;
-    ?>
+function iufe_import_page()
+{
+    $isIdle = get_option('iufe_status') == "progress" ? false : true;
+?>
     <div class="wrap iufe-main">
         <h2>Import Users from Excel</h2>
         <form id="iufe-import-form" enctype="multipart/form-data">
             <input type="file" name="iufe_excel_file" id="iufe_excel_file" accept=".xlsx">
-            <input type="submit" id="iufe-btn" <?= $isIdle?"":"disabled" ?> value="Upload and Import" class="button-primary">
+            <input type="submit" id="iufe-btn" <?= $isIdle ? "" : "disabled" ?> value="Upload and Import" class="button-primary">
             <div id="iufe-progress-bar" style="width: 100%; background-color: #f3f3f3; margin-top: 10px;">
                 <div id="iufe-progress" style="width: 0%; height: 24px; background-color: #4caf50; text-align: center; line-height: 24px; color: white;">0%</div>
             </div>
             <div id="iufe-status"></div>
         </form>
     </div>
-    <?php
+<?php
 }
 
 // Handle the initial file upload and save it
-function iufe_handle_upload() {
+function iufe_handle_upload()
+{
     check_ajax_referer('iufe_import_nonce', 'nonce');
-    
+
     if (!current_user_can('manage_options')) {
         wp_send_json_error('You do not have permission to perform this action.');
     }
@@ -91,10 +97,10 @@ function iufe_handle_upload() {
     if (!empty($_FILES['file']['tmp_name'])) {
         require_once(ABSPATH . 'wp-admin/includes/file.php');
         $uploaded_file = wp_handle_upload($_FILES['file'], ['test_form' => false]);
-        
+
         if (isset($uploaded_file['file'])) {
             update_option('iufe_uploaded_file', $uploaded_file['file']); // Save file path to option
-            update_option('iufe_status','progress');
+            update_option('iufe_status', 'progress');
             $rows = iufe_get_excel_rows($uploaded_file['file']);
             wp_send_json_success([
                 'total_rows' => count($rows),
@@ -110,9 +116,10 @@ function iufe_handle_upload() {
 add_action('wp_ajax_iufe_upload_file', 'iufe_handle_upload');
 
 // Handle processing the rows in chunks
-function iufe_handle_process_chunk() {
+function iufe_handle_process_chunk()
+{
     check_ajax_referer('iufe_import_nonce', 'nonce');
-    
+
     if (!current_user_can('manage_options')) {
         wp_send_json_error('You do not have permission to perform this action.');
     }
@@ -127,6 +134,8 @@ function iufe_handle_process_chunk() {
     // Process the current chunk of rows
     for ($i = $chunk_start; $i < $chunk_start + $chunk_size && $i < $total_rows; $i++) {
         iufe_process_row($rows[$i]);
+        $percent = floor(($i * 100) / $total_rows);
+        update_option("iufe_progress", $percent);
     }
 
     // Calculate progress percentage
@@ -141,7 +150,7 @@ function iufe_handle_process_chunk() {
         ]);
     } else {
         // All rows processed
-        update_option('iufe_status','');
+        update_option('iufe_status', '');
         wp_send_json_success([
             'progress' => 100,
             'message' => 'All rows have been processed!'
@@ -150,8 +159,20 @@ function iufe_handle_process_chunk() {
 }
 add_action('wp_ajax_iufe_process_chunk', 'iufe_handle_process_chunk');
 
+
+function iufe_get_progress()
+{
+    $progress = get_option('iufe_progress');
+    wp_send_json_success([
+        'progress' => $progress,
+    ]);
+}
+
+add_action('wp_ajax_iufe_get_progress', 'iufe_get_progress');
+
 // Get the rows from the Excel file
-function iufe_get_excel_rows($file_path) {
+function iufe_get_excel_rows($file_path)
+{
     require_once(plugin_dir_path(__FILE__) . 'vendor/autoload.php');
     $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file_path);
     $sheet = $spreadsheet->getActiveSheet();
@@ -159,7 +180,8 @@ function iufe_get_excel_rows($file_path) {
 }
 
 // Process a single row
-function iufe_process_row($row) {
+function iufe_process_row($row)
+{
     $display_name = $row[0];
     $mobile_number = $row[1];
     $rank = (int) $row[2];
@@ -186,7 +208,8 @@ function iufe_process_row($row) {
 }
 
 // Normalize phone numbers for Digits plugin compatibility
-function normalize_phone_number($phone_number) {
+function normalize_phone_number($phone_number)
+{
     $digits_phone = '+98' . substr($phone_number, -10);
     $digits_phone_no = substr($phone_number, -10);
 
