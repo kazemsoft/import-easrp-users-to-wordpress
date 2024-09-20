@@ -2,7 +2,7 @@
 /*
 Plugin Name: Import Users from Excel
 Description: Import users from an Excel file into WordPress, ensuring compatibility with the Digits plugin for mobile-based registration.
-Version: 1.2
+Version: 1.3
 Author: Mohammad Kazem Gholian
 Author URI: https://valiasrcs.com
 Plugin URI: https://valiasrcs.com/fa/how-to-transfer-easrp-users
