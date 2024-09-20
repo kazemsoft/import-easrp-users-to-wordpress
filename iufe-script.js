@@ -7,6 +7,7 @@ jQuery(document).ready(function($) {
         formData.append('nonce', iufe_ajax.nonce);
 
         // Reset progress bar
+        $('#iufe-btn').attr("disabled", "disabled");
         $('#iufe-progress').css('width', '0%').text('0%');
         $('#iufe-status').html('');
 
@@ -49,6 +50,7 @@ jQuery(document).ready(function($) {
                         processNextChunk(response.data.next_chunk_start, chunkSize, totalRows);
                     } else {
                         $('#iufe-status').html('<p>All rows have been processed successfully!</p>');
+                        $('#iufe-btn').removeAttr("disabled")
                     }
                 } else {
                     $('#iufe-status').html('<p>Error: ' + response.data + '</p>');

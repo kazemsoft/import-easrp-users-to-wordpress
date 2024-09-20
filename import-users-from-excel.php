@@ -28,6 +28,13 @@ function iufe_delete_all_users_but_admin() {
 // Uncomment the following line when testing
 // iufe_delete_all_users_but_admin();
 
+
+function iufe_init_process_status()
+{
+    update_option('iufe_status', '');
+}
+register_activation_hook(__FILE__, 'iufe_init_process_status');
+
 // Enqueue scripts for AJAX handling and progress bar update
 function iufe_enqueue_scripts($hook) {
     if ($hook !== 'tools_page_import-users-from-excel') {
@@ -134,7 +141,7 @@ function iufe_handle_process_chunk() {
         ]);
     } else {
         // All rows processed
-        update_option('iufe_status','progress');
+        update_option('iufe_status','');
         wp_send_json_success([
             'progress' => 100,
             'message' => 'All rows have been processed!'
