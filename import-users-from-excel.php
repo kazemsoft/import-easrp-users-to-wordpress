@@ -2,7 +2,7 @@
 /*
 Plugin Name: Import Users from Excel
 Description: Import users from an Excel file into WordPress, ensuring compatibility with the Digits plugin for mobile-based registration.
-Version: 1.3
+Version: 1.5
 Author: Mohammad Kazem Gholian
 Author URI: https://valiasrcs.com
 Plugin URI: https://valiasrcs.com/fa/how-to-transfer-easrp-users
@@ -40,10 +40,10 @@ register_activation_hook(__FILE__, 'iufe_init_process_status');
 // Enqueue scripts for AJAX handling and progress bar update
 function iufe_enqueue_scripts($hook)
 {
-    if ($hook !== 'tools_page_import-users-from-excel') {
+    if ($hook !== 'tools_page_import-users-from-excel'  && $hook !== 'tools_page_import-products-from-excel') {
         return;
     }
-    wp_enqueue_script('iufe-script', plugins_url('/iufe-script.js', __FILE__), ['jquery'], null, true);
+    wp_enqueue_script('iufe-script', plugins_url('/iufe-script.js', __FILE__), ['jquery']);
     wp_enqueue_style('iufe-style', plugins_url('/iufe-style.css', __FILE__));
     wp_localize_script('iufe-script', 'iufe_ajax', [
         'ajax_url' => admin_url('admin-ajax.php'),
@@ -66,6 +66,21 @@ function iufe_register_menu()
 }
 add_action('admin_menu', 'iufe_register_menu');
 
+// Register the submenu under Tools for Import Products
+function iufe_register_product_menu()
+{
+    add_submenu_page(
+        'tools.php',
+        'Import Products from Excel',
+        'Import Products',
+        'manage_options',
+        'import-products-from-excel',
+        'iufe_import_products_page'
+    );
+}
+add_action('admin_menu', 'iufe_register_product_menu');
+
+
 // Display the upload form with progress bar
 function iufe_import_page()
 {
@@ -84,6 +99,26 @@ function iufe_import_page()
     </div>
 <?php
 }
+
+
+function iufe_import_products_page()
+{
+    $isIdle = get_option('iufe_status') == "progress" ? false : true;
+?>
+    <div class="wrap iufe-main">
+        <h2>Import Products from Excel</h2>
+        <form id="iufe-product-import-form" enctype="multipart/form-data">
+            <input type="file" name="iufe_product_excel_file" id="iufe_product_excel_file" accept=".xlsx">
+            <input type="submit" id="iufe-product-btn" <?= $isIdle ? "" : "disabled" ?> value="Upload and Import Products" class="button-primary">
+            <div id="iufe-product-progress-bar" style="width: 100%; background-color: #f3f3f3; margin-top: 10px;">
+                <div id="iufe-product-progress" style="width: 0%; height: 24px; background-color: #4caf50; text-align: center; line-height: 24px; color: white;">0%</div>
+            </div>
+            <div id="iufe-product-status"></div>
+        </form>
+    </div>
+<?php
+}
+
 
 // Handle the initial file upload and save it
 function iufe_handle_upload()
@@ -114,6 +149,38 @@ function iufe_handle_upload()
     }
 }
 add_action('wp_ajax_iufe_upload_file', 'iufe_handle_upload');
+
+
+
+// Handle the product file upload and save it
+function iufe_handle_product_upload() {
+    check_ajax_referer('iufe_import_nonce', 'nonce');
+
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('You do not have permission to perform this action.');
+    }
+
+    if (!empty($_FILES['file']['tmp_name'])) {
+        require_once(ABSPATH . 'wp-admin/includes/file.php');
+        $uploaded_file = wp_handle_upload($_FILES['file'], ['test_form' => false]);
+
+        if (isset($uploaded_file['file'])) {
+            update_option('iufe_product_uploaded_file', $uploaded_file['file']); // Save product file path to option
+            update_option('iufe_product_status', 'progress');
+            $rows = iufe_get_excel_rows($uploaded_file['file']);
+            wp_send_json_success([
+                'total_rows' => count($rows),
+                'message' => 'Product file uploaded successfully. Starting import...'
+            ]);
+        } else {
+            wp_send_json_error('Product file upload failed.');
+        }
+    } else {
+        wp_send_json_error('No file uploaded.');
+    }
+}
+add_action('wp_ajax_iufe_upload_product_file', 'iufe_handle_product_upload');
+
 
 // Handle processing the rows in chunks
 function iufe_handle_process_chunk()
@@ -158,6 +225,47 @@ function iufe_handle_process_chunk()
     }
 }
 add_action('wp_ajax_iufe_process_chunk', 'iufe_handle_process_chunk');
+
+
+// Handle processing the product rows in chunks
+function iufe_handle_product_process_chunk() {
+    check_ajax_referer('iufe_import_nonce', 'nonce');
+
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('You do not have permission to perform this action.');
+    }
+
+    $chunk_start = isset($_POST['chunk_start']) ? intval($_POST['chunk_start']) : 2;
+    $chunk_size = isset($_POST['chunk_size']) ? intval($_POST['chunk_size']) : 100;
+    $file_path = get_option('iufe_product_uploaded_file');
+    $rows = iufe_get_excel_rows($file_path);
+    $total_rows = count($rows);
+
+    // Process the current chunk of rows
+    for ($i = $chunk_start; $i < $chunk_start + $chunk_size && $i < $total_rows; $i++) {
+        iufe_process_product_row($rows[$i]);
+        $percent = floor(($i * 100) / $total_rows);
+        update_option("iufe_product_progress", $percent);
+    }
+
+    $progress = (($i - 1) / ($total_rows - 1)) * 100;
+
+    if ($i < $total_rows) {
+        wp_send_json_success([
+            'progress' => $progress,
+            'next_chunk_start' => $i,
+            'message' => "Processed rows " . ($chunk_start) . " to " . ($i) . " of " . ($total_rows)
+        ]);
+    } else {
+        update_option('iufe_product_status', '');
+        wp_send_json_success([
+            'progress' => 100,
+            'message' => 'All product rows have been processed!'
+        ]);
+    }
+}
+add_action('wp_ajax_iufe_process_product_chunk', 'iufe_handle_product_process_chunk');
+
 
 
 function iufe_get_progress()
@@ -214,4 +322,23 @@ function normalize_phone_number($phone_number)
     $digits_phone_no = substr($phone_number, -10);
 
     return [$digits_phone, $digits_phone_no];
+}
+
+
+// Process a single product row
+function iufe_process_product_row($row) {
+    $product_sku = $row[0]; // Assuming SKU is in the first column
+    $main_stock = (int) $row[5]; // Main product stock in 6th column
+    $warehouse_stock = (int) $row[4]; // Central warehouse stock in 5th column
+
+    // Find the product by SKU
+    $product_id = wc_get_product_id_by_sku($product_sku);
+    if ($product_id) {
+        // Update the product stock if it exists
+        update_post_meta($product_id, '_stock', $main_stock);
+        update_post_meta($product_id, 'zarsam_center_stock', $warehouse_stock); // Assuming this meta key for warehouse stock
+    } else {
+        // Optionally, handle products that don't exist
+        // For now, we'll just skip them
+    }
 }

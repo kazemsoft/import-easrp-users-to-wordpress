@@ -94,3 +94,83 @@ jQuery(document).ready(function ($) {
     });
   }
 });
+
+
+jQuery(document).ready(function ($) {
+  // Handle the product import form submission
+  $("#iufe-product-import-form").on("submit", function (e) {
+    e.preventDefault();
+    
+    var formData = new FormData();
+    formData.append("file", $("#iufe_product_excel_file")[0].files[0]);
+    formData.append("action", "iufe_upload_product_file");
+    formData.append("nonce", iufe_ajax.nonce);
+
+    // Disable the button and reset the progress bar
+    $("#iufe-product-btn").attr("disabled", "disabled");
+    $("#iufe-product-progress").css("width", "0%").text("0%");
+    $("#iufe-product-status").html("");
+
+    // Upload the file first
+    $.ajax({
+      url: iufe_ajax.ajax_url,
+      type: "POST",
+      data: formData,
+      contentType: false,
+      processData: false,
+      success: function (response) {
+        if (response.success) {
+          // Start processing rows in chunks after the file is uploaded
+          processNextProductChunk(2, 100, response.data.total_rows); // Start from row 2, chunk size 100
+        } else {
+          $("#iufe-product-status").html("<p>Error: " + response.data + "</p>");
+          $("#iufe-product-btn").removeAttr("disabled");
+        }
+      },
+      error: function () {
+        $("#iufe-product-status").html("<p>Error occurred during file upload.</p>");
+        $("#iufe-product-btn").removeAttr("disabled");
+      },
+    });
+  });
+
+  // Function to process each chunk of products
+  function processNextProductChunk(chunkStart, chunkSize, totalRows) {
+    $.ajax({
+      url: iufe_ajax.ajax_url,
+      type: "POST",
+      data: {
+        action: "iufe_process_product_chunk",
+        nonce: iufe_ajax.nonce,
+        chunk_start: chunkStart,
+        chunk_size: chunkSize,
+      },
+      success: function (response) {
+        if (response.success) {
+          var progress = response.data.progress;
+          
+          // Update the progress bar and status message
+          $("#iufe-product-progress")
+            .css("width", progress + "%")
+            .text(Math.round(progress) + "%");
+          $("#iufe-product-status").html("<p>" + response.data.message + "</p>");
+
+          // Continue processing the next chunk if not yet completed
+          if (progress < 100) {
+            processNextProductChunk(response.data.next_chunk_start, chunkSize, totalRows);
+          } else {
+            $("#iufe-product-status").html("<p>All products have been processed successfully!</p>");
+            $("#iufe-product-btn").removeAttr("disabled");
+          }
+        } else {
+          $("#iufe-product-status").html("<p>Error: " + response.data + "</p>");
+          $("#iufe-product-btn").removeAttr("disabled");
+        }
+      },
+      error: function () {
+        $("#iufe-product-status").html("<p>Error occurred during product processing.</p>");
+        $("#iufe-product-btn").removeAttr("disabled");
+      },
+    });
+  }
+});
