@@ -2,7 +2,7 @@
 /*
 Plugin Name: Import Users from Excel
 Description: Import users from an Excel file into WordPress, ensuring compatibility with the Digits plugin for mobile-based registration.
-Version: 1.5
+Version: 1.6
 Author: Mohammad Kazem Gholian
 Author URI: https://valiasrcs.com
 Plugin URI: https://valiasrcs.com/fa/how-to-transfer-easrp-users
@@ -153,7 +153,8 @@ add_action('wp_ajax_iufe_upload_file', 'iufe_handle_upload');
 
 
 // Handle the product file upload and save it
-function iufe_handle_product_upload() {
+function iufe_handle_product_upload()
+{
     check_ajax_referer('iufe_import_nonce', 'nonce');
 
     if (!current_user_can('manage_options')) {
@@ -228,7 +229,8 @@ add_action('wp_ajax_iufe_process_chunk', 'iufe_handle_process_chunk');
 
 
 // Handle processing the product rows in chunks
-function iufe_handle_product_process_chunk() {
+function iufe_handle_product_process_chunk()
+{
     check_ajax_referer('iufe_import_nonce', 'nonce');
 
     if (!current_user_can('manage_options')) {
@@ -326,7 +328,8 @@ function normalize_phone_number($phone_number)
 
 
 // Process a single product row
-function iufe_process_product_row($row) {
+function iufe_process_product_row($row)
+{
     $product_sku = $row[0]; // Assuming SKU is in the first column
     $main_stock = (int) $row[5]; // Main product stock in 6th column
     $warehouse_stock = (int) $row[4]; // Central warehouse stock in 5th column
@@ -337,6 +340,10 @@ function iufe_process_product_row($row) {
         // Update the product stock if it exists
         update_post_meta($product_id, '_stock', $main_stock);
         update_post_meta($product_id, 'zarsam_center_stock', $warehouse_stock); // Assuming this meta key for warehouse stock
+        if ($warehouse_stock <= 0) {
+            $product = wc_get_product($product_id);
+            $product->set_stock_status('outofstock');
+        }
     } else {
         // Optionally, handle products that don't exist
         // For now, we'll just skip them
