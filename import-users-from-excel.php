@@ -1,8 +1,8 @@
 <?php
 /*
-Plugin Name: Import Users from Excel
-Description: Import users from an Excel file into WordPress, ensuring compatibility with the Digits plugin for mobile-based registration.
-Version: 1.6
+Plugin Name: Import Users & Products Stock Quantities
+Description: Import EASRP users and product stock quantities from an Excel file into WordPress, ensuring compatibility with the Digits plugin for mobile-based registration.
+Version: 1.7
 Author: Mohammad Kazem Gholian
 Author URI: https://valiasrcs.com
 Plugin URI: https://valiasrcs.com/fa/how-to-transfer-easrp-users
@@ -338,12 +338,14 @@ function iufe_process_product_row($row)
     $product_id = wc_get_product_id_by_sku($product_sku);
     if ($product_id) {
         // Update the product stock if it exists
-        update_post_meta($product_id, '_stock', $main_stock);
-        update_post_meta($product_id, 'zarsam_center_stock', $warehouse_stock); // Assuming this meta key for warehouse stock
-        if ($warehouse_stock <= 0) {
-            $product = wc_get_product($product_id);
-            $product->set_stock_status('outofstock');
+        $product = wc_get_product($product_id);
+        $product->set_manage_stock(true);
+        if ($main_stock <= 0 && $warehouse_stock > 0) {
+            $product->set_stock_quantity($warehouse_stock);
+        } else {
+            $product->set_stock_quantity($main_stock);
         }
+        $product->save();
     } else {
         // Optionally, handle products that don't exist
         // For now, we'll just skip them
